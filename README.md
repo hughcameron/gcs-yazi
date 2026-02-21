@@ -8,16 +8,24 @@ are auto-populated as you enter them.
 
 ## Features
 
-- **Browse** — press `gs` to pick a bucket and navigate its contents
-- **Header indicator** — shows `☁ gs://bucket/path/` when inside a GCS directory
-- **Auto-populate** — entering a subdirectory automatically fetches its contents from GCS
-- **File preview** — preview pane shows the first ~800 bytes of GCS objects
-- **Copy path** — works with [copy-volume-path](https://github.com/hughcameron/config) to produce `gs://` URIs
+| Key | Action |
+|-----|--------|
+| `gs` | Browse GCS buckets / refresh current directory |
+| `cg` | Copy `gs://` path of hovered file to clipboard |
+| `gd` | Download hovered file to `~/Downloads` |
+| `gq` | Exit GCS browser, return to previous directory |
+
+**Automatic:**
+- **Header indicator** — shows `☁ gs://bucket/path/` on the right side of the header
+- **Auto-populate** — entering a subdirectory fetches its contents from GCS
+- **Look-ahead** — subdirectories are pre-populated so folder preview works
+- **File preview** — preview pane shows the first N bytes of GCS objects (configurable)
+- **Loading states** — "Loading..." shown in preview pane and notifications during fetch
 
 ## Requirements
 
 - [yazi](https://yazi-rs.github.io/) 26.x+
-- [gcloud CLI](https://cloud.google.com/sdk/gcloud) (`gcloud storage ls`, `gcloud storage cat`)
+- [gcloud CLI](https://cloud.google.com/sdk/gcloud) (`gcloud storage ls`, `gcloud storage cat`, `gcloud storage cp`)
 - Authenticated: `gcloud auth login`
 
 ## Installation
@@ -42,6 +50,10 @@ With options:
 require("gcs-yazi"):setup({
     -- Override gcloud path if not in PATH (default: "gcloud")
     gcloud_path = "/opt/homebrew/bin/gcloud",
+    -- Bytes to fetch for file preview (default: 800)
+    preview_bytes = 2048,
+    -- Download directory (default: ~/Downloads)
+    download_dir = os.getenv("HOME") .. "/Downloads",
 })
 ```
 
@@ -59,13 +71,29 @@ prepend_previewers = [
 
 ### 3. keymap.toml
 
-Add the `gs` keybinding to `~/.config/yazi/keymap.toml`:
+Add keybindings to `~/.config/yazi/keymap.toml`:
 
 ```toml
+# GCS bucket browser
 [[mgr.prepend_keymap]]
 on   = ["g", "s"]
 run  = "plugin gcs-yazi"
-desc = "Browse GCS buckets"
+desc = "Browse GCS buckets / refresh"
+
+[[mgr.prepend_keymap]]
+on   = ["c", "g"]
+run  = "plugin gcs-yazi -- copy"
+desc = "Copy gs:// path"
+
+[[mgr.prepend_keymap]]
+on   = ["g", "d"]
+run  = "plugin gcs-yazi -- download"
+desc = "Download GCS file to ~/Downloads"
+
+[[mgr.prepend_keymap]]
+on   = ["g", "q"]
+run  = "plugin gcs-yazi -- exit"
+desc = "Exit GCS browser"
 ```
 
 ## Usage
@@ -75,7 +103,10 @@ desc = "Browse GCS buckets"
 3. Navigate normally with `l` (enter) and `h` (back)
 4. Subdirectories auto-populate as you enter them
 5. Hover a file to see its content in the preview pane
-6. Press `gs` again while inside a GCS directory to refresh
+6. Press `cg` to copy the `gs://` path of the hovered file
+7. Press `gd` to download the hovered file to `~/Downloads`
+8. Press `gs` to refresh the current GCS directory
+9. Press `gq` to exit back to your previous local directory
 
 ## How it works
 
@@ -83,9 +114,10 @@ The plugin creates a temporary directory at `/tmp/yazi-gcs/<bucket>/` with empty
 files and directories matching the GCS structure. This lets yazi treat it as a
 normal filesystem while the plugin handles fetching content on demand.
 
-- `entry()` — bucket picker + directory population
-- `setup()` — header indicator + `cd` event hook for auto-populate
-- `peek()` — fetches first 800 bytes via `gcloud storage cat` for preview
+- `entry()` — bucket picker, directory population, subcommand dispatch
+- `setup()` — header indicator, `cd` event hook for auto-populate
+- `peek()` — fetches first N bytes via `gcloud storage cat` for preview
+- Look-ahead populate — pre-fetches subdirectory contents so folder preview works
 
 ## License
 
