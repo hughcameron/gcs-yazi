@@ -398,10 +398,18 @@ function M:peek(job)
 	ya.preview_widget(job, { ui.Text("Loading " .. gs_path .. " ..."):area(job.area) })
 
 	-- Fetch file content from GCS
-	local range = "0-" .. tostring(M._preview_bytes or 2048)
+	-- Try range first (efficient for large files); range is inclusive so use limit-1
+	local limit = M._preview_bytes or 2048
 	local out = Command(M._gcloud)
-		:arg({ "storage", "cat", "-r", range, gs_path })
+		:arg({ "storage", "cat", "-r", "0-" .. tostring(limit - 1), gs_path })
 		:stdout(Command.PIPED):stderr(Command.PIPED):output()
+
+	-- Range fails for files smaller than limit — fall back to full cat
+	if not out or not out.status.success then
+		out = Command(M._gcloud)
+			:arg({ "storage", "cat", gs_path })
+			:stdout(Command.PIPED):stderr(Command.PIPED):output()
+	end
 
 	if not out or not out.status.success then
 		local msg = (out and out.stderr) or "gcloud failed"
@@ -409,7 +417,11 @@ function M:peek(job)
 		return
 	end
 
-	ya.preview_widget(job, { ui.Text(out.stdout):area(job.area):wrap(ui.Wrap.YES) })
+	local content = out.stdout or ""
+	if #content > limit then
+		content = content:sub(1, limit)
+	end
+	ya.preview_widget(job, { ui.Text(content):area(job.area):wrap(ui.Wrap.YES) })
 end
 
 function M:seek(job)
